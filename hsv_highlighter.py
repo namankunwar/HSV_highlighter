@@ -13,7 +13,7 @@ from tkinter.filedialog import askdirectory
 
 
 FILE = Path(__file__).parent
-INPUT = Path(FILE / 'input')
+INPUT = Path(FILE / 'bottle')
 
 # PICKLE_DIR = os.path.join()
 
@@ -32,6 +32,8 @@ class TestColorHighlight:
         image = cv2.bitwise_and(image, image_mask)
         return image 
 
+
+    
     def calibrate_hue_value(self):
         min_hue_values = []
         max_hue_values = [] 
@@ -358,10 +360,14 @@ class Imager:
         return masked_image, green_image
 
     def load_from_pickle_file(self): # load self.multiple_masks from pickle
-        with open(self.pickle_path, 'rb') as f1:
-            obj1 = pickle.load(f1)
-        
-        return obj1
+        try:
+            with open(self.pickle_path, 'rb') as f1:
+                obj1 = pickle.load(f1)
+            print("Segmentation data loaded successfully.")
+            return obj1
+        except FileNotFoundError:
+            print("No previous segmentation data found. Starting fresh.")
+            return []  # Return an empty list if no file exists
 
     def append_to_pickle_file(self, mask_list): # append self.multiple_masks in pickle
         
@@ -369,6 +375,7 @@ class Imager:
         masks = [inner_list for i, inner_list in enumerate(mask_list) if inner_list not in mask_list[:i]]
         with open(self.pickle_path, 'wb') as f:
             pickle.dump(masks, f)
+        print("Segmentation data saved successfully.")
 
     def hsv_(self, list_hsv):
         if len(self.listG) < 0:
