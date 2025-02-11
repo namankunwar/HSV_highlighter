@@ -1,13 +1,10 @@
 import os
 import pickle
-import time
 import PIL.Image, PIL.ImageTk
 import numpy as np
 import cv2
 import tkinter as tk
 from PIL import ImageTk, Image
-import yaml
-import glob
 from pathlib import Path
 from tkinter.filedialog import askdirectory
 
@@ -47,7 +44,7 @@ class Imager:
             pickle.dump(self.multiple_masks, f)
         
         self.load_all_images(directory)
-        self.load_image()
+        self.load_image()  # This should load the first image and apply the segmentation data
     
     def load_all_images(self,dir_path ):
         for image_path in os.listdir(dir_path):
@@ -61,8 +58,12 @@ class Imager:
             width = int(self.current_original_image.shape[1] * self.scale_percent / 100)
             height = int(self.current_original_image.shape[0] * self.scale_percent / 100)
             dim = (width, height)
-            self.current_original_image = cv2.resize(self.current_original_image,dim, cv2.INTER_AREA)
+            self.current_original_image = cv2.resize(self.current_original_image, dim, cv2.INTER_AREA)
             self.img_copied = self.current_original_image.copy()
+            
+            # Apply the segmentation data to the first image
+            self.current_mask_image, self.mask_img_fg = self.highlighter(self.multiple_masks, self.color_green)
+            self.current_original_image = cv2.addWeighted(self.current_original_image, self.alpha, self.mask_img_fg, self.beta, self.gamma)
         else:
             pass
         
@@ -366,32 +367,49 @@ class Imager:
         elif event == cv2.EVENT_RBUTTONUP:
             self.erase = False
 
+    def reset_pickle_data(self):
+        """Reset the pickle file data to an empty list."""
+        self.multiple_masks = []  # Clear the in-memory list
+        with open(self.pickle_path, 'wb') as f:
+            pickle.dump(self.multiple_masks, f)  # Save an empty list to the pickle file
+        print("Segmentation data reset successfully.")
+        
+        # Reload the current image to reflect the changes
+        self.load_image()
+        self.current_mask_image, self.mask_img_fg = self.highlighter(self.multiple_masks, self.color_green)
+        self.current_original_image = cv2.addWeighted(self.img_copied, self.alpha, self.mask_img_fg, self.beta, self.gamma)
+        self.refresh()
+
 
 if __name__ == '__main__':
     imager = Imager(INPUT)
 
-    some_img = cv2.resize(imager.current_mask_image, (255,255))
+    some_img = cv2.resize(imager.current_mask_image, (255, 255))
     h, w = some_img.shape[:2]
 
     root = tk.Tk()
-    canvas = tk.Canvas(root,width=520, height=270)
+    canvas = tk.Canvas(root, width=520, height=270)
     canvas.pack()
     icon = Image.open('./assets/highlighter_icon.png')
     photo = ImageTk.PhotoImage(icon)
 
+    # Buttons
     next_button = tk.Button(root, text=">>", command=imager.next_image, bg='red', fg='white')
-    edit_button = tk.Button(root, image = photo, command=imager.run)
+    edit_button = tk.Button(root, image=photo, command=imager.run)
     prev_btn = tk.Button(root, text="<<", command=imager.previous_image, bg='red', fg='white')
+    reset_button = tk.Button(root, text="Reset", command=imager.reset_pickle_data, bg='blue', fg='white')  # New reset button
 
-    # refresh_btn.pack(padx=5, pady=15, side=tk.LEFT)
+    # Pack buttons
     next_button.pack(padx=5, pady=15, side=tk.RIGHT)
     edit_button.pack(padx=5, pady=15, side=tk.RIGHT)
     prev_btn.pack(padx=5, pady=15, side=tk.RIGHT)
+    reset_button.pack(padx=5, pady=15, side=tk.RIGHT)  # Pack the reset button
 
-    original_photoimage,masked_photoimage = imager.label_images()
+    # Canvas setup
+    original_photoimage, masked_photoimage = imager.label_images()
     original_image_canvas = canvas.create_image(0, 0, image=original_photoimage, anchor=tk.NW)
-    masked_image_canvas = canvas.create_image(w+10, 0, image=masked_photoimage, anchor=tk.NW)
-    imager.set_label_images(canvas, original_image_canvas,masked_image_canvas)
+    masked_image_canvas = canvas.create_image(w + 10, 0, image=masked_photoimage, anchor=tk.NW)
+    imager.set_label_images(canvas, original_image_canvas, masked_image_canvas)
 
     # Bind mouse scroll event for zoom functionality
     root.bind("<MouseWheel>", imager.apply_zoom)  # For zooming in/out on scroll
